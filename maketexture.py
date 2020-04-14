@@ -10,8 +10,8 @@ heightmap = "merged.scaled.float32.tiff"
 output_name = "algotexture.png"
 blockreach = 2
 blocksize = float((blockreach * 2 + 1) ** 2)
-threshold = 1.5 #(256*256) / 650 * 10
-mud_threshold = -1 * threshold / 4
+threshold = 3.0
+mud_threshold = -1 * threshold / 8
 
 # open image and obtain raw data
 himg = Image.open(heightmap)
@@ -51,8 +51,8 @@ perc = None
 gray = (128,128,128)
 brown = (64,64,32)
 green = (64,128,32)
-green_np = numpy.array(green, dtype=numpy.float32)
-brown_np = numpy.array(brown, dtype=numpy.float32)
+gray_green_np = numpy.array((gray,green), dtype=numpy.float32)
+green_brown_np = numpy.array((green,brown), dtype=numpy.float32)
 colors = dict()
 merged = Image.new(size=(wid,hig), mode='RGB', color=green)
 for x in range(wid):
@@ -63,18 +63,26 @@ for x in range(wid):
 	for y in range(hig):
 		x2 = x + blockreach
 		y2 = y + blockreach
-		v = hdat_ext[x2,y2]
-		s = hdat_ext[x2-blockreach:x2+blockreach+1,y2-blockreach:y2+blockreach+1]
-		diff = v - (s.sum() / blocksize)  # positive means center is higher
-		if (diff > threshold) or (diff < 0 and (s.max() - s.min() > threshold * 2)):
+		s = hdat_ext[x2-1:x2+2,y2-1:y2+2]
+		diff = s.max() - s.min()
+		if diff > threshold * 2:
 			clr = gray
-		elif diff < mud_threshold:        # notably negative center compared to nieghbors
-			clr = brown
-		elif diff < 0:
-			p = diff / mud_threshold      # result will be positive
-			clr = tuple((green_np * p + brown_np * (1-p)).astype(numpy.uint8))
 		else:
-			continue
+			v = hdat_ext[x2,y2]
+			s = hdat_ext[x2-blockreach:x2+blockreach+1,y2-blockreach:y2+blockreach+1]
+			diff = v - (s.sum() / blocksize)  # positive means center is higher
+			if diff > threshold:
+				clr = gray
+			elif diff > 0:
+				p = diff / threshold          # positive / positive
+				clr = tuple(numpy.array((p,1-p), dtype=numpy.float32).dot(gray_green_np).astype(numpy.uint8))
+			elif diff < mud_threshold:        # notably negative center compared to nieghbors
+				clr = brown
+			elif diff < 0:
+				p = diff / mud_threshold      # negative / negative
+				clr = tuple(numpy.array((1-p,p), dtype=numpy.float32).dot(green_brown_np).astype(numpy.uint8))
+			else:
+				continue
 		merged.putpixel((y,x),clr)
 
 et = time.time() - start_time
