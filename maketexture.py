@@ -11,7 +11,7 @@ output_name = "algotexture.png"
 blockreach = 2
 blocksize = float((blockreach * 2 + 1) ** 2)
 threshold = 1.5 #(256*256) / 650 * 10
-mud_threshold = threshold / 4
+mud_threshold = -1 * threshold / 4
 
 # open image and obtain raw data
 himg = Image.open(heightmap)
@@ -50,11 +50,10 @@ start_time = time.time()
 perc = None
 gray = (128,128,128)
 brown = (64,64,32)
-dgreen = (48,96,24)
 green = (64,128,32)
+green_np = numpy.array(green, dtype=numpy.float32)
+brown_np = numpy.array(brown, dtype=numpy.float32)
 colors = dict()
-for c in (gray,brown,dgreen,green):
-	colors[c] = 0
 merged = Image.new(size=(wid,hig), mode='RGB', color=green)
 for x in range(wid):
 	newperc = int(100 * x / wid)
@@ -66,17 +65,16 @@ for x in range(wid):
 		y2 = y + blockreach
 		v = hdat_ext[x2,y2]
 		s = hdat_ext[x2-blockreach:x2+blockreach+1,y2-blockreach:y2+blockreach+1]
-		a = s.sum() / blocksize
-		if (v > a + threshold) or (v < a and (s.max() - s.min() > threshold * 2)):
+		diff = v - (s.sum() / blocksize)  # positive means center is higher
+		if (diff > threshold) or (diff < 0 and (s.max() - s.min() > threshold * 2)):
 			clr = gray
-		elif v < a - mud_threshold:
+		elif diff < mud_threshold:        # notably negative center compared to nieghbors
 			clr = brown
-		elif v < a - (mud_threshold/2.0):
-			clr = dgreen
+		elif diff < 0:
+			p = diff / mud_threshold      # result will be positive
+			clr = tuple((green_np * p + brown_np * (1-p)).astype(numpy.uint8))
 		else:
-			colors[green] += 1
 			continue
-		colors[clr] += 1
 		merged.putpixel((y,x),clr)
 
 et = time.time() - start_time
@@ -85,6 +83,5 @@ spmp = 1000 * 1000 / pps
 print("Elapsed seconds: %s" % int(round(et)))
 print("Pixels per second: %s" % int(round(pps)))
 print("Seconds per million pixels: %s" % int(round(spmp)))
-print("Pixel summary: %s" % str(colors))
 print("Write texture.")
 merged.save(output_name)
